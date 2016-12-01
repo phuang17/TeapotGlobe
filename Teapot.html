@@ -1,0 +1,271 @@
+<!DOCTYPE HTML> 
+<html lang="en"> 
+<head>
+<title>Po-Han Huang's Teapot Globe</title>
+<meta charset="utf-8">
+
+<!-- All srcipts -->
+<script type="text/javascript" src="gl-matrix-min.js"></script>
+<script type="text/javascript" src="webgl-utils.js"></script>
+<script type="text/javascript" src="images.js"></script>
+<script type="text/javascript" src="startup.js"></script>
+<script type="text/javascript" src="view.js"></script>
+<script type="text/javascript" src="skybox.js"></script>
+<script type="text/javascript" src="teapot.js"></script>
+<script type="text/javascript" src="webgl-debug.js"></script>
+
+</head>
+<body onload="startup();" style="height: 600px;">
+
+  <!-- Canvas --> 
+  <div style="width: 720px; display: inline-block; vertical-align: top;">
+    <canvas id="myGLCanvas" width="700" height="700"></canvas>
+  </div>
+
+  <!-- User Interface -->
+  <div style="display: inline-block; vertical-align: top;">
+    <h3>Welcome to Po-Han Huang's Teapot Globe</h3>
+    <p>Camera rotation speed: 
+      <input type="checkbox" onclick="toggleCameraSpeed(this.checked);" checked>On/Off</input>
+      <input id="camera_speed_range" type="range" name="points" min="-1.0" max="1.0" value="0.2" step="0.01" oninput="setCameraSpeed(this.value);">
+      <span id="camera_speed_value">0.2</span>
+    </p>
+    <p>Teapot rotation speed: 
+      <input type="checkbox" onclick="toggleTeapotSpeed(this.checked);" checked>On/Off</input>
+      <input id="teapot_speed_range" type="range" name="points" min="-1.0" max="1.0" value="-0.5" step="0.01" oninput="setTeapotSpeed(this.value);">
+      <span id="teapot_speed_value">-0.5</span>
+    </p>
+    <p>Bumpiness: 
+      <input id="bumpiness_range" type="range" name="points" min="0.0" max="50.0" value="25.0" step="0.1" oninput="setBumpiness(this.value);">
+      <span id="bumpiness_value">25.0</span>
+    </p>
+    <p><input type="checkbox" onclick="toggleLight(this.checked);" checked>Light</input></p>
+    <p><input type="checkbox" onclick="toggleReflection(this.checked);" checked>Reflection</input></p>
+    <p><input type="checkbox" onclick="toggleNormal(this.checked);" checked>Normal Mapping</input></p>
+    <br><br><br>
+    <p>I do not own the images. Their sources are listed below:</p>
+    <p>The environment map is taken from <a href="http://www.humus.name/index.php?page=Textures&ID=137">here</a> with CC-BY license.</p>
+    <p>The normal map is taken from <a href="http://www.celestiamotherlode.net/catalog/earthbumpspec.php">here</a>.</p>
+  </div>
+
+  <!-- Interface Control -->
+  <script type="text/javascript">
+  /** Set camera rotation speed. */
+  function setCameraSpeed(value){
+    viewAngleStep=degToRad(parseFloat(value));
+    document.getElementById("camera_speed_value").innerHTML = value;
+  }
+
+  /** Enable/disable camera rotation. */
+  function toggleCameraSpeed(status){
+    setCameraSpeed(status?document.getElementById("camera_speed_range").value:0);
+    document.getElementById("camera_speed_range").disabled = !status;
+  }
+
+  /** Set teapot rotation speed. */
+  function setTeapotSpeed(value){
+    teapotAngleStep=degToRad(parseFloat(value));
+    document.getElementById("teapot_speed_value").innerHTML = value;
+  }
+
+  /** Enable/disable teapot rotation. */
+  function toggleTeapotSpeed(status){
+    setTeapotSpeed(status?document.getElementById("teapot_speed_range").value:0);
+    document.getElementById("teapot_speed_range").disabled = !status;
+  }
+
+  /** Set bumpiness. */
+  function setBumpiness(value){
+    bumpiness = value;
+    document.getElementById("bumpiness_value").innerHTML = value;
+  }
+
+  /** Enable/disable light. */
+  function toggleLight(status){
+    lightEnable = status ? 1.0 : 0.0;
+  }
+
+  /** Enable/disable environment reflection. */
+  function toggleReflection(status){
+    reflectionEnable = status ? 1.0 : 0.0;
+    environment_ambient = status ? ENV_AMBIENT_LIGHT_ON : ENV_AMBIENT_LIGHT_OFF;
+  }
+
+  /** Enable/disable normal mapping. */
+  function toggleNormal(status){
+    normalEnable = status ? 1.0 : 0.0;
+  }
+
+  </script>
+
+  <!-- Shader program source codes (not displayed) -->
+  <div id="shader_codes" style="display:none;">
+
+    <!-- Skybox vertex shader -->
+    <div id="skyboxVertexShaderDOM">
+
+    attribute vec3 aVertexPosition;
+
+    uniform mat4 uPMatrix;
+    uniform mat4 uMVMatrix; 
+
+    varying vec3 vPosition;
+
+    void main(void) {
+      gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+      vPosition= aVertexPosition;   
+    }
+
+    </div>
+    <!-- Skybox fragment shader -->
+    <div id="skyboxFragmentShaderDOM">
+
+    precision mediump float;
+
+    uniform samplerCube uEnv;
+
+    varying vec3 vPosition;
+
+    void main(void) {
+      gl_FragColor = textureCube(uEnv, normalize(vPosition));
+    }
+
+    </div>
+
+    <!-- Teapot vertex shader -->
+    <!-- Phong shading with Phong reflection model -->
+    <div id="teapotVertexShaderDOM">
+
+    attribute vec3 aVertexPosition;
+    attribute vec3 aVertexNormal;
+
+    uniform mat4 uPMatrix;
+    uniform mat4 uMVMatrix;
+    uniform mat4 uModelMatrix;
+
+    varying vec3 vModelPosition;
+    varying vec3 vModelNormal;
+    varying vec3 vWorldPosition;
+    varying vec3 vWorldNormal;
+    varying vec3 vVertexColor;
+
+    void main(void) {
+
+      vModelPosition = aVertexPosition;
+      vModelNormal = aVertexNormal;
+
+      vec4 worldPosition = uModelMatrix * vec4(aVertexPosition, 1.0);
+      
+      vWorldPosition = vec3(worldPosition);
+      vWorldNormal = normalize(mat3(uModelMatrix) * aVertexNormal);
+      vVertexColor = vec3(0.8,0.8,0.8);
+      
+      gl_Position = uPMatrix * uMVMatrix * worldPosition;
+           
+    }
+
+    </div>
+    <!-- Teapot fragment shader -->
+    <div id="teapotFragmentShaderDOM">
+
+    precision mediump float;
+
+    const float shininess = 1000.0;
+    const float PI = 3.1415926535897932384626433832795;
+
+    uniform vec3 uViewOrigin;
+    uniform vec3 uLightDirection;
+    uniform vec3 uAmbientLight;
+    uniform vec3 uDiffuseLight;
+    uniform vec3 uSpecularLight;
+
+    uniform samplerCube uEnv;
+    uniform sampler2D uNormalMap;
+
+    uniform float uNormalEnable;
+    uniform float uReflectionEnable;
+    uniform float uBumpiness;
+    
+    varying vec3 vModelPosition;
+    varying vec3 vModelNormal;
+    varying vec3 vWorldPosition;
+    varying vec3 vWorldNormal;
+    varying vec3 vVertexColor;
+
+    void main(void) {
+
+      vec3 worldPosition = vWorldPosition;
+      vec3 worldNormal = normalize(vWorldNormal);
+      vec3 modelPosition = vModelPosition;
+      // Adjust to actual center of teapot.
+      modelPosition.y -= 1.0;
+      modelPosition = normalize(modelPosition);
+      vec3 modelNormal = normalize(vModelNormal);
+
+      // Calculate texture coorinates.
+      vec2 textureCoord;
+      textureCoord.s = -atan(-modelPosition.z, -modelPosition.x) / 2.0 / PI + 0.5;
+      textureCoord.t = 0.5 - 0.5 * modelPosition.y;
+
+      // Calculate tangent bases in world coordinates.
+      vec3 tangentBAxis = vec3(0.0,1.0,0.0);
+      tangentBAxis = normalize(tangentBAxis - dot(tangentBAxis, worldNormal) * worldNormal);
+      vec3 tangentTAxis = normalize(cross(tangentBAxis, worldNormal));
+
+      // Load normal map.
+      vec3 targetNormal = texture2D(uNormalMap, textureCoord).rgb;
+      // Hard-coded fine tuning
+      targetNormal.r = targetNormal.r / 129.0 * 127.5;
+      targetNormal.g = targetNormal.g / 128.0 * 127.5;
+      targetNormal = normalize(targetNormal * 2.0 - 1.0);
+
+      // Increase bumpiness
+      targetNormal.r = targetNormal.r * uBumpiness;
+      targetNormal.g = targetNormal.g * uBumpiness;
+      targetNormal = normalize(targetNormal);
+
+      // Calculate new normal after adding normal map
+      targetNormal = targetNormal.r * tangentTAxis - targetNormal.g * tangentBAxis + targetNormal.b * worldNormal;
+      targetNormal = normalize(targetNormal);
+
+      worldNormal = uNormalEnable * targetNormal + (1.0 - uNormalEnable) * worldNormal;
+
+      // Phong reflection model
+      vec3 normalizedLightDirection = normalize(uLightDirection);
+      vec3 vectorReflection = normalize( reflect(-normalizedLightDirection, worldNormal) );
+      vec3 vectorView = normalize( uViewOrigin - worldPosition );      
+
+      float diffuseLightWeighting = max( dot(worldNormal, normalizedLightDirection), 0.0 );
+      float specularLightWeighting = pow( max( dot(vectorReflection, vectorView), 0.0), shininess );
+
+      // Sum up lighting and reflection parts
+      gl_FragColor = vec4(
+                      ( uAmbientLight * vVertexColor)
+                    + ((uDiffuseLight * vVertexColor) * diffuseLightWeighting)
+                    + ( uSpecularLight * specularLightWeighting),
+                      1.0 );
+      gl_FragColor += vec4(textureCube(uEnv, worldNormal).rgb * uReflectionEnable, 0.0);
+    }
+
+    </div>
+
+  </div>
+
+  <style type="text/css">
+
+.interfaceDiv {
+  display: inline-block;
+  position: relative;
+  text-align: center;
+  vertical-align: top;
+}
+
+.interfaceDiv > * {
+  margin: 0px;
+}
+
+  </style>
+
+</body>
+
+</html>
