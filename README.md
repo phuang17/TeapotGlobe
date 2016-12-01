@@ -4,7 +4,7 @@ This is a machine problem for *[CS418: Computer Graphics](https://courses.engr.i
 
 ## Instructions
 
-Open [*Teapot.html*](https://phuang17.github.io/SideProjects/TeapotGlobe/teapot.html) in web browser.
+Open [*Teapot.html*](https://phuang17.github.io/SideProjects/TeapotGlobe/Teapot.html) in web browser.
 
 ## Compatibility
 
