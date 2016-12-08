@@ -1,4 +1,4 @@
-# Po-Han Huang's Flight Simulator
+# Po-Han Huang's Teapot Globe
 
 This is a machine problem for *[CS418: Computer Graphics](https://courses.engr.illinois.edu/cs418/)* at University of Illinois at Urbana-Champaign in the Fall 2016 semester. 
 
